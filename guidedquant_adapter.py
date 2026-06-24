@@ -424,7 +424,7 @@ def materialize_lnq_variant(
     for layer_idx, module_name, full_name, module in _target_modules(analyzer):
         qweight_layer, lut_layer = _load_layer_cache(lnq_cache_path, bits, layer_idx)
         qres = _guidedquant_to_qres(qweight_layer[module_name], lut_layer[module_name], module.weight.device)
-        if rbvt_position == "assignment_last":
+        if rbvt_calib_texts is not None and rbvt_position == "assignment_last":
             if not hessian_cache_path:
                 raise ValueError("hessian_cache_path is required for rbvt_position='assignment_last'")
             layer_hessian = _load_layer_hessian(hessian_cache_path, layer_idx, module_name)
