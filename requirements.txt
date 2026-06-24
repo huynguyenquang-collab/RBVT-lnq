@@ -7,3 +7,5 @@ accelerate
 safetensors
 lm-eval
 python-dotenv
+numba
+flash1dkmeans
