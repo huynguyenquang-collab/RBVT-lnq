@@ -103,6 +103,19 @@ bash scripts/run_lnq_suite.sh --mode all --rbvt-mode all
 Use `RBVT_MODE=naive` or `RBVT_MODE=lnq_aware` with the RBVT scripts to choose the target type.
 For one unified entrypoint, use `run_lnq_suite.sh` and choose `--mode`, `--rbvt-mode`, `--model`, and `--bits`.
 `RBVT-lnq` also reads `.env` from the project root; if `--hf-token` is not provided, it will use `HF_TOKEN`, `HUGGINGFACE_HUB_TOKEN`, or `HUGGINGFACE_TOKEN`.
+If disk is tight, `run_lnq_suite.sh` also supports cleanup after each `model + bits` setting:
+
+```bash
+bash scripts/run_lnq_suite.sh --mode all --rbvt-mode all --cleanup-after-setting
+```
+
+That removes bit-specific GuidedQuant artifacts after the setting finishes. To also remove shared caches such as tokens, gradients, saliency, and Hessians, add:
+
+```bash
+bash scripts/run_lnq_suite.sh --mode all --rbvt-mode all --cleanup-after-setting --cleanup-shared-cache
+```
+
+Note that shared-cache cleanup saves more disk, but later runs for another bit-width of the same model will need to recompute those artifacts.
 
 ## Notes
 

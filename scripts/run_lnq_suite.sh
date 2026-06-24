@@ -9,6 +9,9 @@ NUM_GROUPS="${NUM_GROUPS:-4}"
 DATASET="${DATASET:-c4}"
 SEQ_LEN="${SEQ_LEN:-2048}"
 NUM_EXAMPLES="${NUM_EXAMPLES:-128}"
+CACHE_DIR="${CACHE_DIR:-./cache}"
+NUM_ITERATIONS="${NUM_ITERATIONS:-3}"
+CD_CYCLES="${CD_CYCLES:-4}"
 RBVT_CALIB_DATASET="${RBVT_CALIB_DATASET:-c4}"
 RBVT_N_CALIB="${RBVT_N_CALIB:-128}"
 RBVT_MAX_LENGTH="${RBVT_MAX_LENGTH:-2048}"
@@ -52,8 +55,11 @@ Options:
   --bits <n>                Repeatable. Default: 3 and 4
   --device <value>          Override DEVICE
   --num-groups <n>          Override NUM_GROUPS
+  --cache-dir <path>        Root cache directory. Default: ./cache
   --output-root <path>      Root output directory. Default: ./outputs/suite
   --skip-lm-eval            Disable lm-eval and run perplexity only
+  --cleanup-after-setting   Delete bit-specific GuidedQuant caches after each model+bits finishes
+  --cleanup-shared-cache    Also delete shared caches (tokens, gradients, saliency, hessians)
   --dry-run                 Print commands without executing
   --help                    Show this message
 
@@ -69,6 +75,8 @@ MODE="all"
 RBVT_MODE="all"
 OUTPUT_ROOT="./outputs/suite"
 DRY_RUN=0
+CLEANUP_AFTER_SETTING=0
+CLEANUP_SHARED_CACHE=0
 MODELS=()
 BITS_LIST=()
 
@@ -98,12 +106,24 @@ while [[ $# -gt 0 ]]; do
       NUM_GROUPS="$2"
       shift 2
       ;;
+    --cache-dir)
+      CACHE_DIR="$2"
+      shift 2
+      ;;
     --output-root)
       OUTPUT_ROOT="$2"
       shift 2
       ;;
     --skip-lm-eval)
       INCLUDE_LM_EVAL=0
+      shift
+      ;;
+    --cleanup-after-setting)
+      CLEANUP_AFTER_SETTING=1
+      shift
+      ;;
+    --cleanup-shared-cache)
+      CLEANUP_SHARED_CACHE=1
       shift
       ;;
     --dry-run)
@@ -154,6 +174,11 @@ slugify() {
   echo "$s"
 }
 
+cache_model_name() {
+  local s="$1"
+  echo "${s##*/}"
+}
+
 run_cmd() {
   if [[ "$DRY_RUN" == "1" ]]; then
     printf 'DRY RUN:'
@@ -161,6 +186,49 @@ run_cmd() {
     printf '\n'
   else
     "$@"
+  fi
+}
+
+cleanup_path() {
+  local target="$1"
+  if [[ ! -e "$target" ]]; then
+    return
+  fi
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    printf 'DRY RUN: rm -rf %q\n' "$target"
+  else
+    rm -rf "$target"
+    echo "Removed cache artifact: $target"
+  fi
+}
+
+cleanup_setting_artifacts() {
+  local model="$1"
+  local bits="$2"
+  local model_name init_cache lnq_cache packed_cache
+  local tokens_cache gradients_cache saliency_cache hessian_cache
+
+  model_name="$(cache_model_name "$model")"
+
+  init_cache="${CACHE_DIR}/quantized/${model_name}-w${bits}_orig${bits}-${DATASET}_s${NUM_EXAMPLES}_blk${SEQ_LEN}"
+  lnq_cache="${CACHE_DIR}/layerwise_quantized/${model_name}-w${bits}-${DATASET}_s${NUM_EXAMPLES}_blk${SEQ_LEN}_g${NUM_GROUPS}_iter${NUM_ITERATIONS}_cd${CD_CYCLES}"
+  packed_cache="${CACHE_DIR}/layerwise_packed/layerwise-${model_name}-w${bits}-${DATASET}_s${NUM_EXAMPLES}_blk${SEQ_LEN}_g${NUM_GROUPS}_iter${NUM_ITERATIONS}_cd${CD_CYCLES}"
+
+  cleanup_path "$init_cache"
+  cleanup_path "$lnq_cache"
+  cleanup_path "$packed_cache"
+
+  if [[ "$CLEANUP_SHARED_CACHE" == "1" ]]; then
+    tokens_cache="${CACHE_DIR}/tokens/${model_name}-${DATASET}_s${NUM_EXAMPLES}_blk${SEQ_LEN}.pt"
+    gradients_cache="${CACHE_DIR}/gradients/${model_name}-${DATASET}_s${NUM_EXAMPLES}_blk${SEQ_LEN}.pt"
+    saliency_cache="${CACHE_DIR}/saliency/${model_name}-${DATASET}_s${NUM_EXAMPLES}_blk${SEQ_LEN}_g${NUM_GROUPS}"
+    hessian_cache="${CACHE_DIR}/hessians/${model_name}-${DATASET}_s${NUM_EXAMPLES}_blk${SEQ_LEN}_g${NUM_GROUPS}"
+
+    cleanup_path "$tokens_cache"
+    cleanup_path "$gradients_cache"
+    cleanup_path "$saliency_cache"
+    cleanup_path "$hessian_cache"
   fi
 }
 
@@ -185,11 +253,14 @@ run_one() {
       --model-path "$model" \
       --bits "$bits" \
       --device "$DEVICE" \
+      --cache-dir "$CACHE_DIR" \
       --output-root "$output_dir" \
       --dataset "$DATASET" \
       --seq-len "$SEQ_LEN" \
       --num-examples "$NUM_EXAMPLES" \
       --num-groups "$NUM_GROUPS" \
+      --num-iterations "$NUM_ITERATIONS" \
+      --cd-cycles "$CD_CYCLES" \
       --rbvt-calib-dataset "$RBVT_CALIB_DATASET" \
       --rbvt-n-calib "$RBVT_N_CALIB" \
       --rbvt-max-length "$RBVT_MAX_LENGTH" \
@@ -205,11 +276,14 @@ run_one() {
     --model-path "$model" \
     --bits "$bits" \
     --device "$DEVICE" \
+    --cache-dir "$CACHE_DIR" \
     --output-root "$output_dir" \
     --dataset "$DATASET" \
     --seq-len "$SEQ_LEN" \
     --num-examples "$NUM_EXAMPLES" \
     --num-groups "$NUM_GROUPS" \
+    --num-iterations "$NUM_ITERATIONS" \
+    --cd-cycles "$CD_CYCLES" \
     --rbvt-calib-dataset "$RBVT_CALIB_DATASET" \
     --rbvt-n-calib "$RBVT_N_CALIB" \
     --rbvt-max-length "$RBVT_MAX_LENGTH" \
@@ -235,9 +309,9 @@ expand_rbvt_modes() {
   fi
 }
 
-while IFS= read -r mode; do
-  for model in "${MODELS[@]}"; do
-    for bits in "${BITS_LIST[@]}"; do
+for model in "${MODELS[@]}"; do
+  for bits in "${BITS_LIST[@]}"; do
+    while IFS= read -r mode; do
       if [[ "$mode" == "lnq" ]]; then
         run_one "$model" "$bits" "$mode" "na"
       else
@@ -245,6 +319,11 @@ while IFS= read -r mode; do
           run_one "$model" "$bits" "$mode" "$rbvt_mode"
         done < <(expand_rbvt_modes)
       fi
-    done
+    done < <(expand_modes)
+
+    if [[ "$CLEANUP_AFTER_SETTING" == "1" ]]; then
+      echo "--- Cleaning caches for model=${model} bits=${bits} ---"
+      cleanup_setting_artifacts "$model" "$bits"
+    fi
   done
-done < <(expand_modes)
+done
