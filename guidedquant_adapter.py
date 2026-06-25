@@ -230,9 +230,16 @@ def collect_activation_stats(
     device: str,
     max_length: int,
     want_var: bool,
+    sub_qlayer: tuple[int, int] | None = None,
 ):
     collector = ActStatsCollector(want_var=want_var)
-    modules = [(full_name, module) for _, _, full_name, module in _target_modules(analyzer)]
+    target_modules = _target_modules(analyzer)
+    if sub_qlayer is not None:
+        layer_start, layer_end = sub_qlayer
+        target_modules = [
+            item for item in target_modules if layer_start <= item[0] < layer_end
+        ]
+    modules = [(full_name, module) for _, _, full_name, module in target_modules]
     collector.register(modules)
 
     for text in calib_texts:
@@ -385,6 +392,7 @@ def materialize_lnq_variant(
     row_chunk: int = 256,
     rbvt_max_length: int = 512,
     strict_descent: bool = True,
+    sub_qlayer: tuple[int, int] | None = None,
 ) -> dict:
     tokenizer = load_tokenizer(model_path, hf_token)
     model = AutoModelForCausalLM.from_pretrained(
@@ -397,6 +405,13 @@ def materialize_lnq_variant(
     model.eval()
 
     analyzer = get_analyzer(model)
+    target_modules = _target_modules(analyzer)
+    if sub_qlayer is not None:
+        layer_start, layer_end = sub_qlayer
+        target_modules = [
+            item for item in target_modules if layer_start <= item[0] < layer_end
+        ]
+
     stats_summary = None
     means: dict[str, torch.Tensor] = {}
     variances: dict[str, torch.Tensor] = {}
@@ -409,6 +424,7 @@ def materialize_lnq_variant(
             device=device,
             max_length=rbvt_max_length,
             want_var=rbvt_lambda > 0.0,
+            sub_qlayer=sub_qlayer,
         )
 
     total_rbvt = None
@@ -425,7 +441,7 @@ def materialize_lnq_variant(
             "variance_increase": 0.0,
         }
 
-    for layer_idx, module_name, full_name, module in _target_modules(analyzer):
+    for layer_idx, module_name, full_name, module in target_modules:
         qweight_layer, lut_layer = _load_layer_cache(lnq_cache_path, bits, layer_idx)
         qres = _guidedquant_to_qres(qweight_layer[module_name], lut_layer[module_name], module.weight.device)
         if rbvt_calib_texts is not None and rbvt_position == "assignment_last":
@@ -492,5 +508,6 @@ def materialize_lnq_variant(
         "rbvt_budget_p": rbvt_budget_p,
         "rbvt_target_ratio": rbvt_target_ratio,
         "rbvt_mse_guard": rbvt_mse_guard,
+        "sub_qlayer": list(sub_qlayer) if sub_qlayer is not None else None,
         "rbvt_stats": stats_summary,
     }

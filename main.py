@@ -286,6 +286,7 @@ def main():
         output_dir=str(lnq_model_dir),
         device=args.device,
         hf_token=args.hf_token,
+        sub_qlayer=tuple(args.sub_qlayer) if args.sub_qlayer else None,
     )
     model_paths["lnq"] = str(lnq_model_dir)
 
@@ -331,6 +332,7 @@ def main():
             row_chunk=args.row_chunk,
             rbvt_max_length=args.rbvt_max_length,
             strict_descent=not args.allow_overshoot,
+            sub_qlayer=tuple(args.sub_qlayer) if args.sub_qlayer else None,
         )
         model_paths[rbvt_variant_name] = str(rbvt_model_dir)
 
