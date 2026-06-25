@@ -33,6 +33,7 @@ def any_precision_quantize(
         num_groups=None,
         sub_saliency=None,
         skip_save_gradients=False,
+        sub_qlayer=None,
 ):
 
     # Logging with time sans date, level name, and message
@@ -174,6 +175,7 @@ def any_precision_quantize(
         parent_precision=parent_precision,
         cpu_count=cpu_count,
         random_state=random_state,
+        sub_qlayer=sub_qlayer,
     )
 
     if mode == 'quantize':

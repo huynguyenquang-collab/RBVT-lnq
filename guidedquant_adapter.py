@@ -171,6 +171,7 @@ def run_lnq_pipeline(
         overwrite_pack=overwrite_pack,
         random_state=random_state,
         num_groups=num_groups,
+        sub_qlayer=sub_qlayer,
     )
 
     print("Running GuidedQuant LNQ cache build ...")

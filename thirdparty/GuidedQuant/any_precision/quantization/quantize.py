@@ -258,6 +258,7 @@ def seed_and_upscale(
         parent_precision,
         cpu_count=None,
         random_state=None,
+        sub_qlayer=None,
 ):
     group_count=1
     assert seed_precision <= parent_precision, "Parent precision should be equal or higher than seed precision"
@@ -280,6 +281,9 @@ def seed_and_upscale(
 
     layers_to_process, completed_layers = _load_progress(output_folder, seed_precision, parent_precision,
                                                         analyzer.num_layers)
+
+    if sub_qlayer:
+        layers_to_process = [i for i in layers_to_process if i in range(sub_qlayer[0], sub_qlayer[1])]
 
     if completed_layers:
         logging.info(f"The following layers will be skipped as they have already been processed:\n{completed_layers}")
