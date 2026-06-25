@@ -526,7 +526,7 @@ def accumulate_saliency_weighted_hessians(
         #     or a list of length len(devices), each is { sublayer_name -> partial saliency } for multi-GPU.
         file_path = os.path.join(saliency_path, f"l{l}.pt")
         # This might be either a dict or a list-of-dicts
-        loaded = torch.load(file_path)
+        loaded = torch.load(file_path, weights_only=False)
 
         orig_num_groups = list(loaded.values())[0].shape[-1]
         assert orig_num_groups % num_groups == 0, f"orig_num_groups {orig_num_groups} must be divisible by num_groups {num_groups}"

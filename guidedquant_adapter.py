@@ -272,8 +272,8 @@ def _load_layer_cache(lnq_cache_path: str, bits: int, layer_idx: int):
     # Those labels come from LNQ's latest original assignment step, so applying
     # RBVT on top of this cache is a true post-pass after the LNQ assignment that
     # already exists in the upstream pipeline.
-    qweight = torch.load(qweight_path, map_location="cpu")
-    lut = torch.load(lut_path, map_location="cpu")
+    qweight = torch.load(qweight_path, map_location="cpu", weights_only=False)
+    lut = torch.load(lut_path, map_location="cpu", weights_only=False)
     return qweight, lut
 
 
@@ -313,7 +313,7 @@ def _guidedquant_to_qres(module_qweight, module_lut, device: torch.device) -> Qu
 
 def _load_layer_hessian(hessian_cache_path: str, layer_idx: int, module_name: str) -> torch.Tensor:
     hessian_path = Path(hessian_cache_path) / f"l{layer_idx}.pt"
-    hessian_layer = torch.load(hessian_path, map_location="cpu")
+    hessian_layer = torch.load(hessian_path, map_location="cpu", weights_only=False)
     return fix_hessian_shape(hessian_layer[module_name]).float()
 
 

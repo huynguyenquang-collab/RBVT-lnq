@@ -176,7 +176,7 @@ def get_tokens(dataset_name, split, tokenizer, seq_len, num_samples, save_path=N
 
     if save_path is not None and os.path.isfile(save_path):
         logging.info(f"Loading tokens from {save_path}")
-        return torch.load(save_path)
+        return torch.load(save_path, weights_only=False)
 
     logging.info(f"Fetching dataset: {dataset_name}")
     texts = _get_dataset(dataset_name, split)

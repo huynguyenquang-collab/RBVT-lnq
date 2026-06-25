@@ -88,11 +88,11 @@ def _process_layer_data(args):
     layer_data = {}
 
     weightpath = os.path.join(lut_path, 'weights', f'l{layer_idx}.pt')
-    layer_weights = torch.load(weightpath)
+    layer_weights = torch.load(weightpath, weights_only=False)
 
     misc_weightpath = os.path.join(lut_path, 'misc_weights', f'l{layer_idx}.pt')
     if os.path.exists(misc_weightpath):
-        layer_misc_weights = torch.load(misc_weightpath)
+        layer_misc_weights = torch.load(misc_weightpath, weights_only=False)
 
     for i, name in enumerate(module_names):
         N, group_count, group_size = layer_weights[name].shape
@@ -114,7 +114,7 @@ def _process_layer_data(args):
 
         for bit in range(seed_precision, parent_precision + 1):
             layer_lut_path = os.path.join(lut_path, f'lut_{bit}', f'l{layer_idx}.pt')
-            layer_lut = torch.load(layer_lut_path)
+            layer_lut = torch.load(layer_lut_path, weights_only=False)
 
             curLUT = np.empty((N, 2 ** bit), dtype=np.float16)
             for r_idx in range(N):
@@ -213,7 +213,7 @@ def _process_mixed_layer_data(args):
         precision = layerwise_config[f"{layer_idx:02}={name}"]["precision"]
 
         weightpath = os.path.join(lut_path, 'weights', f'l{layer_idx}.pt')
-        layer_weights = torch.load(weightpath)
+        layer_weights = torch.load(weightpath, weights_only=False)
 
         N, group_count, group_size = layer_weights[name].shape
         K = group_count * group_size
@@ -234,7 +234,7 @@ def _process_mixed_layer_data(args):
 
         for bit in range(precision, precision + 1):
             layer_lut_path = os.path.join(lut_path, f'lut_{bit}', f'l{layer_idx}.pt')
-            layer_lut = torch.load(layer_lut_path)
+            layer_lut = torch.load(layer_lut_path, weights_only=False)
 
             curLUT = np.empty((N, 2 ** bit), dtype=np.float16)
             for r_idx in range(N):
