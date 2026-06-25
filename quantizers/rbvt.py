@@ -27,6 +27,9 @@ class RBVTStats:
     channels: int
     candidates: int
     boundary_kept: int
+    weight_count: int
+    weight_sse_before: float
+    weight_sse_after: float
     bias_before: float
     bias_after: float
     objective_before: float
@@ -80,6 +83,8 @@ def apply_rbvt(
     Wq_full = qres.W_dequant.to(device).float()
     indices_full = qres.indices.to(device)
     Wq_rbvt = Wq_full.clone()
+    weight_sse_before = float((Wq_full - W_fp.float()).square().sum().item())
+    weight_count = int(W_fp.numel())
     if candidate_mask is not None:
         candidate_mask = candidate_mask.to(device=device, dtype=torch.bool)
         if candidate_mask.shape != W_fp.shape:
@@ -239,11 +244,15 @@ def apply_rbvt(
             objective_after += (T - final_r) ** 2 + rbvt_lambda * final_q
             variance_increase += final_q
 
+    weight_sse_after = float((Wq_rbvt - W_fp.float()).square().sum().item())
     return Wq_rbvt, RBVTStats(
         flips=total_flips,
         channels=out_features,
         candidates=total_candidates,
         boundary_kept=boundary_kept,
+        weight_count=weight_count,
+        weight_sse_before=weight_sse_before,
+        weight_sse_after=weight_sse_after,
         bias_before=bias_before,
         bias_after=bias_after,
         objective_before=objective_before,

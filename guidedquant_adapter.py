@@ -435,6 +435,9 @@ def materialize_lnq_variant(
             "channels": 0,
             "candidates": 0,
             "boundary_kept": 0,
+            "weight_count": 0,
+            "weight_sse_before": 0.0,
+            "weight_sse_after": 0.0,
             "bias_before": 0.0,
             "bias_after": 0.0,
             "objective_before": 0.0,
@@ -488,6 +491,16 @@ def materialize_lnq_variant(
             )
             for key, value in asdict(layer_stats).items():
                 total_rbvt[key] += value
+            mse_before = layer_stats.weight_sse_before / max(1, layer_stats.weight_count)
+            mse_after = layer_stats.weight_sse_after / max(1, layer_stats.weight_count)
+            mse_delta = mse_after - mse_before
+            print(
+                "RBVT MSE | "
+                f"layer={layer_idx} module={module_name} target={rbvt_target_mode} "
+                f"flips={layer_stats.flips} candidates={layer_stats.candidates} "
+                f"mse_before={mse_before:.8e} mse_after={mse_after:.8e} "
+                f"delta={mse_delta:+.8e}"
+            )
 
         module.weight.data = weight_out.to(module.weight.dtype)
 
@@ -497,6 +510,12 @@ def materialize_lnq_variant(
     tokenizer.save_pretrained(output_path)
 
     if total_rbvt is not None:
+        weight_count = max(1, int(total_rbvt["weight_count"]))
+        total_rbvt["weight_mse_before"] = total_rbvt["weight_sse_before"] / weight_count
+        total_rbvt["weight_mse_after"] = total_rbvt["weight_sse_after"] / weight_count
+        total_rbvt["weight_mse_delta"] = (
+            total_rbvt["weight_mse_after"] - total_rbvt["weight_mse_before"]
+        )
         stats_summary = total_rbvt
 
     return {
