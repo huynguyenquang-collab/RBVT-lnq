@@ -76,6 +76,15 @@ def get_inps(
             super().__init__()
             self.module = module
 
+        def __getattr__(self, name):
+            try:
+                return super().__getattr__(name)
+            except AttributeError:
+                module = self._modules.get("module")
+                if module is not None:
+                    return getattr(module, name)
+                raise
+
         def forward(self, inp, **kwargs):
             inps[cache["i"] // nsamples_per_device][cache["i"] % nsamples_per_device] = inp
             cache["i"] += 1
