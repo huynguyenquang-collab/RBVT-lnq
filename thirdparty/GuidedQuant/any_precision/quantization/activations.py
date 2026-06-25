@@ -404,7 +404,8 @@ def accumulate_saliency_weighted_hessians(
     data: List[torch.Tensor],
     saliency_path: str,             # Path containing l{L}.pt => { sublayer_name -> saliency Tensor }
     output_folder: str,
-    num_groups: int
+    num_groups: int,
+    sub_qlayer=None,
 ) -> bool:
     """
     1) get_inps(...) => inps, forward_args
@@ -421,9 +422,17 @@ def accumulate_saliency_weighted_hessians(
     Returns True if the hessians are already cached, False otherwise.
     """
 
+    layers = analyzer.get_layers()
+    num_layers = len(layers)
+    if sub_qlayer is not None:
+        start_layer, end_layer = sub_qlayer
+        target_layers = list(range(start_layer, min(end_layer, num_layers)))
+    else:
+        start_layer, end_layer = 0, num_layers
+        target_layers = list(range(num_layers))
+
     if output_folder and os.path.exists(output_folder):
-        if all(os.path.exists(os.path.join(output_folder, f"l{i}.pt")) 
-                for i in range(len(analyzer.get_layers()))):
+        if all(os.path.exists(os.path.join(output_folder, f"l{i}.pt")) for i in target_layers):
             logging.info(f"Cached hessians found in {output_folder}")
             return True
 
@@ -449,12 +458,8 @@ def accumulate_saliency_weighted_hessians(
 
     outs = [torch.zeros_like(inp_tensor) for inp_tensor in inps]
 
-    # 2) Layers
-    layers = analyzer.get_layers()
-    num_layers = len(layers)
-
     processed_layers = []
-    for l in range(num_layers):
+    for l in target_layers:
         if os.path.exists(os.path.join(output_folder, f"l{l}.pt")):
             processed_layers.append(l)
         
@@ -462,13 +467,31 @@ def accumulate_saliency_weighted_hessians(
 
     module_names = analyzer.module_names  # e.g. sub-layer names
     from .utils import get_progress_bar     # adapt if needed
-    pb = get_progress_bar(num_layers, "Accumulating saliency Hessians blockwise")
+    pb = get_progress_bar(len(target_layers), "Accumulating saliency Hessians blockwise")
 
     # 3) Blockwise
     for l in range(num_layers):
+        if l >= end_layer:
+            break
 
         layer = layers[l]
         layer.to(torch.device("cpu"))
+
+        if l < start_layer:
+            update_outs_parallel(
+                devices=devices,
+                layer=layer,
+                inps=inps,
+                outs=outs,
+                compute_mse=False,
+                is_after_quant=False,
+                **forward_args
+            )
+            layer.to(torch.device("cpu"))
+            inps, outs = outs, inps
+            torch.cuda.empty_cache()
+            layers[l] = None
+            continue
 
         if l in processed_layers:
             logging.info(f"Skipping layer {l} because it has already been processed")

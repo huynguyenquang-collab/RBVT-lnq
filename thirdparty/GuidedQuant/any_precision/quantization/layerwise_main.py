@@ -139,7 +139,14 @@ def layerwise_nuq(
     # ------------------- Get Hessians -------------------
     logging.info("------------------- Get Hessians -------------------")
     logging.info(f"Getting Hessians for {dataset} with sequence length {seq_len} and {num_examples} examples")
-    from_cache = accumulate_saliency_weighted_hessians(analyzer, tokens, saliency_cache_path, hessians_cache_path, num_groups)
+    from_cache = accumulate_saliency_weighted_hessians(
+        analyzer,
+        tokens,
+        saliency_cache_path,
+        hessians_cache_path,
+        num_groups,
+        sub_qlayer=sub_qlayer,
+    )
     logging.info("Hessians loading complete.")
 
     if mode == 'hessians':
